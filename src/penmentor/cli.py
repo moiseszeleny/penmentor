@@ -40,7 +40,7 @@ def model_choices():
 def label(key, value):
     """A settings row's value: models show their harness first ("codex   gpt-5.6-terra"), the rest as they are."""
     if key != 'model':
-        return f'{value:<8}'
+        return f'{value:<10}'
     h, m = harness.pick(value)
     return f'{h:<7}{m:<28}'
 
@@ -61,6 +61,8 @@ def settings(reopen):
             return
         v = dict(zip(rows, (a for a, _ in choices))).get(v, v if free else None)
         if v:
+            if key == 'subject' and v != CONF[key]:
+                SESSION.unlink(missing_ok=True)  # the conversation so far was with the other tutor
             save(**{key: v})
 
 

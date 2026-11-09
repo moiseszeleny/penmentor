@@ -21,6 +21,12 @@ TEX_FIXES = [  # LaTeX that matplotlib's mathtext lacks -> the nearest thing it 
     (r'\\[lr]vert' + W_, '|'), (r'\\[lr]Vert' + W_, r'\\Vert'), (r'\\text(bf|it)' + W_, r'\\math\1'),
     (r'\\dd' + W_, 'd'), (r'\\color\{[^}]*\}', ''), (r'\\(begin|end)\{[^}]*\}', ''), (r'\\\\', r'\\;'), (r'(?<!\\)&', ''),
     (r'\\(displaystyle|textstyle|limits|nolimits|[bB]igg?[lr]?|boxed|cancel)' + W_, ''),
+    # the physics macros of PREAMBLE, spelled out
+    (r'\\ket\{([^{}]*)\}', r'|\1\\rangle'), (r'\\bra\{([^{}]*)\}', r'\\langle \1|'),
+    (r'\\(braket|expval)\{([^{}]*)\}', r'\\langle \2\\rangle'), (r'\\comm\{([^{}]*)\}\{([^{}]*)\}', r'[\1,\2]'),
+    (r'\\acomm\{([^{}]*)\}\{([^{}]*)\}', r'\\{\1,\2\\}'), (r'\\pdv\{([^{}]*)\}\{([^{}]*)\}', r'\\dfrac{\\partial \1}{\\partial \2}'),
+    (r'\\dv\{([^{}]*)\}\{([^{}]*)\}', r'\\dfrac{d\1}{d\2}'), (r'\\abs\{([^{}]*)\}', r'|\1|'), (r'\\norm\{([^{}]*)\}', r'\\Vert \1\\Vert'),
+    (r'\\order\{([^{}]*)\}', r'\\mathcal{O}(\1)'), (r'\\(Tr|tr)' + W_, r'\\mathrm{\1}'), (r'\\slashed\{([^{}]*)\}', r'\1\\!\\!/'),
 ]
 
 
@@ -89,6 +95,12 @@ UNI = {'θ': r'\theta', 'π': r'\pi', 'α': r'\alpha', 'β': r'\beta', 'γ': r'\
 UNI_RE = '[' + ''.join(map(re.escape, UNI)) + ']'
 PREAMBLE = r"""\documentclass{article}
 \usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{amsmath,amssymb,cancel}
+\IfFileExists{slashed.sty}{\usepackage{slashed}}{\providecommand\slashed[1]{{\not{#1}}}}
+\providecommand\bra[1]{\langle #1\rvert}\providecommand\ket[1]{\lvert #1\rangle}\providecommand\braket[1]{\langle #1\rangle}
+\providecommand\expval[1]{\langle #1\rangle}\providecommand\comm[2]{[#1,#2]}\providecommand\acomm[2]{\{#1,#2\}}
+\providecommand\dv[2]{\dfrac{d#1}{d#2}}\providecommand\pdv[2]{\dfrac{\partial #1}{\partial #2}}
+\providecommand\abs[1]{\lvert #1\rvert}\providecommand\norm[1]{\lVert #1\rVert}\providecommand\order[1]{\mathcal{O}(#1)}
+\providecommand\Tr{\operatorname{Tr}}\providecommand\tr{\operatorname{tr}}\providecommand\dd{\mathrm{d}}
 \pagestyle{empty}""" + ''.join(rf'\DeclareMathSizes{{{z}}}{{{z * 1.05:.1f}}}{{{z * .8:.1f}}}{{{z * .6:.1f}}}'
                                 for z in sorted({HEAD, NOTE, GHOST, FIX, TIP, READ, DRILL})) + r"\begin{document}"
 SS, GAMMA = 3, '1.6'  # LaTeX supersampling factor, dvipng gamma

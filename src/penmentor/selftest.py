@@ -68,12 +68,16 @@ def text():
                       ('e.g. a sign slip (not yours)', 'e.g. a sign slip (not yours)'),
                       ('so arcsin(1) = ?', r'so $\arcsin(1) =$ ?'), (r'$\theta=arcsin(x)$', r'$\theta=\arcsin(x)$')):
         assert tex_source(raw) == want, (raw, tex_source(raw))
+    for raw, want in ((r'$\comm{x}{p}=i\hbar$', r'$[x,p]=i\hbar$'), (r'$\bra{\phi}\ket{\psi}$', r'$\langle \phi||\psi\rangle$'),
+                      (r'$\pdv{L}{q}$', r'$\dfrac{\partial L}{\partial q}$'), (r'$\Tr\slashed{p}$', r'$\mathrm{Tr}p\!\!/$')):
+        assert tex_source(raw) == want, (raw, tex_source(raw))  # the physics macros, for mathtext
     assert plain(r'$\dfrac{\pi}{2} \cdot x$') == '(π)/(2) ⋅ x', plain(r'$\dfrac{\pi}{2} \cdot x$')
     assert latex_source('θ ≤ 1, 50% done') == r'$\theta  \leq  1$, $50\%$ done', latex_source('θ ≤ 1, 50% done')
     if typeset.LATEX:
-        ks = [(r'$\iff$ ok', 19), (r'$\nosuchcmd x$', 19), (r'$\frac{1}{2$', 19), (r'$|x|=\begin{cases}x\\-x\end{cases}$', 19)]
+        ks = [(r'$\iff$ ok', 19), (r'$\nosuchcmd x$', 19), (r'$\frac{1}{2$', 19), (r'$|x|=\begin{cases}x\\-x\end{cases}$', 19),
+              (r'$\Tr(\slashed{p}\gamma^\mu)$, $\braket{\phi|\psi}$, $\pdv{L}{\dot q}=\comm{x}{p}$', 19)]
         run_latex(ks)
-        assert [typeset._typeset[k] is not None for k in ks] == [True, False, False, True], [typeset._typeset[k] for k in ks]
+        assert [typeset._typeset[k] is not None for k in ks] == [True, False, False, True, True], [typeset._typeset[k] for k in ks]
         assert typeset._typeset[ks[3]].height() > typeset._typeset[ks[0]].height()  # the cases page really is the cases page
 
 
@@ -312,7 +316,32 @@ def windows_bits():
     assert parse('ctrl+alt+shift+a') == (0x4000 | 0x7, ord('A')) and parse('Win+F9')[1] == 0x78
 
 
+def subjects():
+    """settings.json "subject": physics swaps the tutor, its methods and four tasks; calculus is the prompt as it was."""
+    import importlib
+    from . import prompts
+    from .config import CONF
+    saved = dict(CONF)
+    try:
+        CONF.update(subject='calculus', techniques=None)
+        calc = importlib.reload(prompts)
+        assert calc.SYSTEM.startswith('You are a calculus tutor') and 'integration by parts' in calc.TECHNIQUES
+        sys_c, tasks_c = calc.SYSTEM, dict(calc.TASKS)
+        CONF.update(subject='physics')
+        phys = importlib.reload(prompts)
+        assert phys.SYSTEM.startswith('You are a tutor in mathematics and theoretical physics') and 'metric signature' in phys.SYSTEM
+        assert phys.SYSTEM.startswith(sys_c.split('\n')[0].replace('a calculus tutor', phys.PHYSICS_TUTOR)[:60])
+        assert 'Lagrangian and Euler-Lagrange' in phys.TECHNIQUES and set(phys.TASKS) == set(tasks_c)
+        assert all(phys.TASKS[k] != tasks_c[k] for k in phys.PHYSICS_TASKS) and phys.TASKS['check'] == tasks_c['check']
+        CONF.update(techniques=['mine'])
+        assert importlib.reload(prompts).TECHNIQUES == ['mine']
+    finally:
+        CONF.clear()
+        CONF.update(saved)
+        importlib.reload(prompts)
+
+
 def selftest():
-    for check in (pages, text, desktop, menus, formulas, plots, overlay, page_export, stopping, harnesses, windows_bits):
+    for check in (pages, text, desktop, menus, formulas, plots, overlay, page_export, stopping, harnesses, windows_bits, subjects):
         check()
     print('selftest ok')

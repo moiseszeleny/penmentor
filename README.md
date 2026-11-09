@@ -25,6 +25,8 @@ the next step, and *show* me why. penmentor is that, one key away, on my own Cla
 - **See it.** Box what you want to understand and get an interactive animation made with 3Blue1Brown's own
   [manim](https://github.com/3b1b/manim): drag the bounds, retype a value, watch Riemann sums close in.
 - **Whole page aware.** A small xournal++ plugin shares the page you are on, not just what fits on screen.
+- **Calculus or physics.** One setting switches to a tutor for theoretical physics: it respects your conventions,
+  checks indices and units, and knows bras, kets and slashes ([physics mode](docs/guide.md#physics)).
 
 ## Works with Claude Code, Codex and Antigravity
 

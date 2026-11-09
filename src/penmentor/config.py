@@ -27,8 +27,9 @@ CHOICES = {  # models as harness:model (which command-line agent runs it; see ha
               ('codex:gpt-5.6-terra', 'GPT-5.6 Terra')],
     'effort': [('low', 'fastest'), ('medium', 'balanced'), ('high', 'more careful'), ('xhigh', 'slower'), ('max', 'slowest, most careful')],
     'context': [('on', 'each question builds on the earlier ones'), ('off', 'each question starts fresh')],
+    'subject': [('calculus', 'integrals, limits, series'), ('physics', 'maths and theoretical physics')],  # prompts.py
 }
-CONF = {'model': 'claude:opus', 'effort': 'medium', 'context': 'on', 'stats': False, 'read': False}  # stats/read: s and t panels, kept on between questions
+CONF = {'model': 'claude:opus', 'effort': 'medium', 'context': 'on', 'subject': 'calculus', 'stats': False, 'read': False}  # stats/read: s and t panels, kept on between questions
 try:
     CONF |= json.loads(SETTINGS.read_text())
 except (OSError, ValueError):

@@ -1,4 +1,11 @@
-"""What penmentor asks the model, and the JSON shape it answers in."""
+"""What penmentor asks the model, and the JSON shape it answers in.
+
+settings.json "subject" picks the tutor: "calculus" (integrals, limits, series; the default) or "physics" (maths and
+theoretical physics: same marks and modes, its own methods list, rules on conventions and indices). "techniques" (a list)
+replaces the menu of "Which technique?" for either."""
+from .config import CONF
+
+SUBJECT = CONF.get('subject', 'calculus')
 
 PRESETS = [  # rofi menu: (label, mode)
     ('✓  Did I make any mistakes?', 'check'),
@@ -17,6 +24,14 @@ TECHNIQUES = ['u-substitution', 'integration by parts', 'trig identities (powers
               "L'Hôpital's rule", 'geometric series', 'p-series', 'divergence test (n-th term)', 'integral test',
               'direct comparison', 'limit comparison', 'alternating series test', 'ratio test', 'root test',
               'telescoping series', 'power / Taylor series']
+PHYSICS_TECHNIQUES = ['free-body diagram, Newton’s laws', 'energy conservation', 'momentum or angular momentum conservation',
+                      'Lagrangian and Euler-Lagrange', 'Hamiltonian and Hamilton’s equations', 'Noether: symmetry gives a conserved quantity',
+                      'cyclic coordinate', 'small oscillations, normal modes', 'separation of variables', 'Fourier transform',
+                      'Green’s function', 'Gauss or Stokes theorem', 'dimensional analysis, limiting cases',
+                      'perturbation theory', 'variational method', 'ladder operators', 'commutator algebra',
+                      'change of basis, diagonalise', 'Lorentz transformation, 4-vectors', 'index gymnastics (raise, lower, contract)',
+                      'gamma-matrix trace identities', 'Wick contractions, Feynman rules', 'partition function', 'Gaussian integral']
+TECHNIQUES = CONF.get('techniques') or (PHYSICS_TECHNIQUES if SUBJECT == 'physics' else TECHNIQUES)
 MORE = ('That was not enough. Give one level more help than your previous answer, on this ladder: '
         'nudge → name the technique and colour-code the parts → ghost the next line → show the full fix.')
 
@@ -48,6 +63,15 @@ Rules:
 - If you are not sure you read a symbol right, use role unsure instead of error.
 - Don't do the student's work for them: a hint should make them think, unless they ask for the solution.
 - Ignore app toolbars and anything that is not maths."""
+PHYSICS_TUTOR = ('a tutor in mathematics and theoretical physics (mechanics, electromagnetism, relativity, quantum mechanics, '
+                 'quantum field theory, statistical mechanics)')
+PHYSICS_RULES = r"""
+- Respect the conventions on the page or earlier in the conversation: metric signature, units (e.g. $\hbar=c=1$), Fourier and normalisation conventions, index placement, summation convention. A sign or factor that depends on a convention nobody stated is not an error: use role unsure with a note naming it, e.g. "with $(+,-,-,-)$?".
+- Read indices carefully: up or down, primes, daggers, bars, hats on operators. Free indices must match on both sides and each summed index appear once up and once down; a mismatch is a real error.
+- Check units and limiting cases ($\hbar\to 0$, $v\ll c$, small coupling, one dimension) when they show where an error is.
+- Besides amsmath, these are defined for your texts: \slashed{p}, \bra{\psi}, \ket{\psi}, \braket{\phi|\psi}, \expval{A}, \comm{A}{B}, \acomm{A}{B}, \dv{f}{x}, \pdv{f}{x}, \abs{x}, \norm{x}, \order{x}, \Tr, \dd."""
+if SUBJECT == 'physics':
+    SYSTEM = SYSTEM.replace('a calculus tutor', PHYSICS_TUTOR) + PHYSICS_RULES
 
 TASKS = {
     'check': 'Check this work for mistakes. Circle the first real error (role error) with a note that shows the fix. '
@@ -101,6 +125,29 @@ TASKS = {
                   'is boxed: a definite integral is an area (area or riemann); revolution only if the boxed problem asks for a '
                   'volume or a solid of revolution. Circle (role a) each boxed part. Headline: what to watch, verdict hint.',
 }
+PHYSICS_TASKS = {
+    'technique': 'Which method fits the problem I am working on (or about to start)? Do not solve it and do not name any method. '
+                 'Colour the features that point to the method (shape mark or circle, roles a, b, c; pieces that work together share '
+                 'a letter), each with a note of at most 5 words naming the feature, e.g. "$L$ has no $\\phi$", "$V$ depends on $r$ only", '
+                 '"small $\\epsilon$", "trace of $\\gamma$ matrices". Headline: "Which method fits?", verdict hint. I will pick a method next.',
+    'final': 'I think I am done. Check my solution as a whole: is the final answer correct, and is anything missing or off '
+             '(e.g. units and dimensions, a sign, a factor of $i$, $\\hbar$, $c$ or $2\\pi$, normalisation, boundary or initial '
+             'conditions, a limiting case that fails, free indices that do not match, or not answering what was asked)? '
+             'Tick the final answer if right; if wrong, circle it and put the correct answer in a note. '
+             'Ghost each missing piece where it belongs (role fix). If it is complete and correct, say so in the headline (verdict correct).',
+    'why': 'Quiz me on my reasoning. Pick the 1 or 2 steps where understanding matters most (a choice of coordinates or gauge, a '
+           'symmetry, a sign or factor of $i$, an approximation, why a term vanishes). At each, put a mark (shape box, role ask) whose '
+           'note is a short question, e.g. "Why is $p_\\phi$ conserved?", "Where did the $\\frac{1}{2}$ go?". Do not hint at the '
+           'answer. Headline: "Explain these steps", verdict hint.',
+    'show': 'Show me visually what is going on, 3Blue1Brown style: put one animation in plot, with the actual function from my '
+            'work and its constants set to simple numbers (e.g. $\\hbar=m=\\omega=1$; say so in the title). Pick the kind that shows '
+            'the physics: curves for a potential, a wavefunction or a dispersion relation (g = a second curve, e.g. $|\\psi|^2$ or '
+            'an energy level); parametric for a trajectory or a phase-space orbit; polar for an orbit $r(\\theta)$; area for an '
+            'integral such as work or a probability; series or taylor for an expansion. Circle (role a) the part of my work it '
+            'shows. Headline: what to watch, verdict hint.',
+}
+if SUBJECT == 'physics':
+    TASKS |= PHYSICS_TASKS
 
 FMT = 'Plain words; EVERY bit of maths, even a lone x or arcsin(1), inside $...$ as LaTeX.'
 EXPR = ('A formula in Python syntax with explicit *: x**2, 3*x, sqrt(x), exp(-x), log(x) for ln, abs(x), sin(x), arctan(x), '

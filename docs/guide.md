@@ -5,7 +5,7 @@ marks work with coloured pens: rings round the mistake, ticks on the right lines
 arrows from cause to effect. Words are a last resort.
 
 Built for [xournal++](https://xournalpp.github.io/) and a pen tablet on Linux (X11, works best with i3) or Windows 10/11,
-for calculus, but it reads whatever maths is on screen.
+for calculus, but it reads whatever maths is on screen, and has a [physics mode](#physics).
 
 ## What it can do
 
@@ -46,6 +46,26 @@ history* plays an old one again, without asking the model.
 
 Hover or tap a mark for its one-line "why". Questions build on each other (one conversation) until you pick
 *Clear context*; turn that off in *Settings*, where you also choose the model (see below) and effort.
+
+### Physics
+
+*Settings → subject → physics* (or `"subject": "physics"` in settings.json) turns the calculus tutor into one for maths and
+theoretical physics: mechanics, electromagnetism, relativity, quantum mechanics, QFT, statistical mechanics. The marks
+and modes stay the same; what changes:
+
+- the model respects the conventions written on the page (metric signature, $\hbar=c=1$, Fourier and normalisation,
+  index placement) and marks a sign that only depends on an unstated convention as *unsure*, not as an error. Write
+  your conventions at the top of the page;
+- it checks free and summed indices, units and limiting cases;
+- *Which technique?* lists physics methods (Lagrangian, Noether, perturbation theory, Wick contractions, trace
+  identities…); `"techniques": [...]` in settings.json replaces that list for either subject;
+- *Solution check*, *Quiz me* and *Show me* ask physics questions (units, factors of $i$ and $2\pi$, boundary
+  conditions; potentials and wavefunctions as curves, trajectories as parametric plots);
+- the notes can use `\slashed{p}`, `\bra`, `\ket`, `\braket`, `\expval`, `\comm`, `\acomm`, `\dv`, `\pdv`, `\abs`,
+  `\norm`, `\order`, `\Tr`.
+
+It is the model's judgement, not a computer algebra check: for long traces or index contractions, check a box at a time.
+Switching subject starts a new conversation.
 
 ## How it works, and what leaves your computer
 
