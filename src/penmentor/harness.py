@@ -24,7 +24,30 @@ from .prompts import SCHEMA, SYSTEM
 
 HARNESSES = {'claude': 'Claude Code', 'agy': 'Antigravity', 'codex': 'Codex'}
 WIN = sys.platform == 'win32'
-BIN = {h: shutil.which(h) or str(Path.home() / '.local/bin' / (h + '.exe' * WIN)) for h in HARNESSES}  # i3's PATH may lack ~/.local/bin
+
+
+def fresh_path():
+    """Windows: PATH as the registry has it now. An agent installed after login (winget, npm) is on it, while a process
+    started earlier, like penmentor's keys, still carries the old PATH."""
+    import winreg
+    parts = [os.environ.get('PATH', '')]
+    for root, key in ((winreg.HKEY_CURRENT_USER, 'Environment'),
+                      (winreg.HKEY_LOCAL_MACHINE, r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment')):
+        try:
+            with winreg.OpenKey(root, key) as k:
+                parts.append(os.path.expandvars(winreg.QueryValueEx(k, 'Path')[0]))
+        except OSError:
+            pass
+    return os.pathsep.join(parts)
+
+
+def find(h):
+    """Where harness h is installed; else its usual place (i3's PATH may lack ~/.local/bin)."""
+    return (shutil.which(h) or (WIN and shutil.which(h, path=fresh_path()))
+            or str(Path.home() / '.local/bin' / (h + '.exe' * WIN)))
+
+
+BIN = {h: find(h) for h in HARNESSES}
 SEND_EDGE = 1568  # long edge of the images the model sees; its boxes come back in that space
 TURN = CACHE / 'turn'  # the screenshots as files, for the harnesses that take images as files
 VIEW_ONLY = ('Open these image files with your file viewer, in this order, and use only the file viewer: run no commands '
