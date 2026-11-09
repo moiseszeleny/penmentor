@@ -34,7 +34,9 @@ $lnk.Arguments = '-m penmentor --daemon'
 $lnk.WorkingDirectory = $repo
 $lnk.Description = 'penmentor: the keys that start it'
 $lnk.Save()
-Start-Process -FilePath $pyw -ArgumentList '-m', 'penmentor', '--daemon' -WorkingDirectory $repo
+# started by Explorer, through the shortcut: not a child of this terminal, so closing it (or the app that opened it)
+# doesn't take the keys down with it
+Start-Process explorer.exe -ArgumentList "`"$startup`""
 
 Write-Host ''
 Write-Host 'Done. Ctrl+Alt+Shift+A asks (menu), Ctrl+Alt+Shift+M checks for mistakes, Ctrl+Alt+Shift+S checks the solution.'
