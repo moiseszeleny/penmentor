@@ -1060,6 +1060,9 @@ class QuietWindow(Window):
                                    on_text_motion_select=lambda m: self.scene and self.scene.on_text_motion(m, True))
         win = self._window
         win.set_caption('penmentor · show me')
+        if not sys.platform.startswith('linux'):  # the rest is X11 and i3: elsewhere the window simply opens where asked
+            self.to_default_position()
+            return win.set_visible(True)
         win._set_atoms_property('_NET_WM_WINDOW_TYPE', ('_NET_WM_WINDOW_TYPE_DIALOG',))  # i3 floats dialogs
         from ctypes import POINTER, byref, c_ubyte, c_ulong, cast
         from pyglet.libs.x11 import xlib

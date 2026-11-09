@@ -49,6 +49,15 @@ git clone https://github.com/AbdullahAlhariri/penmentor ~/src/penmentor
 Linux on X11 (best with i3), with one of those agents logged in (`claude`, `codex` or `agy`), plus `rofi`, `slop`,
 `xdotool` and PyQt6. Bind `bin/penmentor` to a key ([example](contrib/i3.conf)). Setup, keys and how it works: [the guide](docs/guide.md).
 
+**Windows 10/11:** Python 3.10+, xournal++ and one agent logged in, then
+
+```powershell
+git clone https://github.com/moiseszeleny/penmentor $HOME\src\penmentor
+powershell -ExecutionPolicy Bypass -File $HOME\src\penmentor\contrib\windows\install.ps1
+```
+
+and press **Ctrl+Alt+Shift+A** in xournal++ ([details](docs/guide.md#windows-1011)).
+
 ## Star History
 
 <a href="https://www.star-history.com/?repos=abdullahalhariri%2Fpenmentor&type=date&legend=bottom-right">

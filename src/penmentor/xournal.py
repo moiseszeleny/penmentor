@@ -1,16 +1,21 @@
 """The whole current xournal++ page, not just the part on screen (the problem statement is often scrolled away).
 
 penmentor's xournal++ plugin (xournalpp-plugin/penmentor) exports the current page from memory, so unsaved strokes count,
-when it gets its shortcut; penmentor sends that shortcut and waits for ~/.cache/penmentor/page.png.
+when it gets its shortcut; penmentor sends that shortcut and waits for page.png in its cache
+(~/.cache/penmentor on Linux, %LOCALAPPDATA%/penmentor/cache on Windows).
 """
 import os
-import subprocess
+import sys
 import time
 from pathlib import Path
 
+from . import desktop
 from .config import CACHE
 
-PLUGIN = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'xournalpp' / 'plugins' / 'penmentor'
+if sys.platform == 'win32':  # xournal++ keeps its config, plugins included, in %LOCALAPPDATA%\xournalpp
+    PLUGIN = Path(os.environ.get('LOCALAPPDATA') or Path.home() / 'AppData' / 'Local') / 'xournalpp' / 'plugins' / 'penmentor'
+else:
+    PLUGIN = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'xournalpp' / 'plugins' / 'penmentor'
 PAGE, INFO = CACHE / 'page.png', CACHE / 'page.txt'
 MISS = CACHE / 'page.miss'  # pid of a xournal++ that didn't answer (started before the plugin was installed): don't wait on it again
 KEY = 'ctrl+alt+shift+F12'  # the plugin's accelerator (main.lua)
@@ -18,9 +23,8 @@ KEY = 'ctrl+alt+shift+F12'  # the plugin's accelerator (main.lua)
 
 def focused():
     """xournal++'s pid if it is the active window (only then does the shortcut reach it), else None."""
-    p = subprocess.run(['xdotool', 'getactivewindow', 'getwindowclassname', 'getwindowpid'], capture_output=True, text=True)
-    cls, _, pid = p.stdout.strip().partition('\n')
-    return pid.strip() or '?' if 'xournal' in cls.lower() else None
+    cls, pid = desktop.focused_app()  # X11: the window class; Windows: the executable (xournalpp.exe)
+    return (pid or '?') if cls and 'xournal' in cls.lower() else None
 
 
 class PageRequest:
@@ -36,7 +40,7 @@ class PageRequest:
 
     @staticmethod
     def poke():
-        subprocess.run(['xdotool', 'key', KEY], capture_output=True)
+        desktop.press(KEY)
 
     def result(self, wait=1.5):
         """(PNG bytes, 'page 3 of 5'), or None without the plugin. Safe to call twice."""

@@ -1,13 +1,23 @@
-"""Where penmentor keeps things, and your settings (model, effort, context), saved in ~/.config/penmentor/settings.json."""
+"""Where penmentor keeps things, and your settings (model, effort, context), saved in settings.json:
+~/.config/penmentor on Linux, %LOCALAPPDATA%/penmentor on Windows."""
 import json
 import os
+import sys
 from pathlib import Path
 
-CACHE = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'penmentor'
-SETTINGS = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'penmentor' / 'settings.json'
+if sys.platform == 'win32':  # one folder for all of it (the XDG variables still win if you set them)
+    _HOME = Path(os.environ.get('LOCALAPPDATA') or Path.home() / 'AppData' / 'Local') / 'penmentor'
+    _xdg = lambda var, default: Path(os.environ[var]) / 'penmentor' if os.environ.get(var) else default
+    CACHE = _xdg('XDG_CACHE_HOME', _HOME / 'cache')
+    SETTINGS = _xdg('XDG_CONFIG_HOME', _HOME) / 'settings.json'
+    DATA = _xdg('XDG_DATA_HOME', _HOME / 'data')  # kept: Show-me history, manim
+    MANIM = DATA / 'manim' / 'Scripts' / 'python.exe'  # a venv with manimgl (README), for Show me
+else:
+    CACHE = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'penmentor'
+    SETTINGS = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'penmentor' / 'settings.json'
+    DATA = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share') / 'penmentor'  # kept: Show-me history, manim
+    MANIM = DATA / 'manim' / 'bin' / 'python'  # a venv with manimgl (README), for Show me
 SESSION = CACHE / 'session.json'  # the conversation every question builds on (and its harness), until Clear context
-DATA = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share') / 'penmentor'  # kept: Show-me history, manim
-MANIM = DATA / 'manim' / 'bin' / 'python'  # a venv with manimgl (README), for Show me
 STATE = CACHE / 'state'  # 'busy', or 'waiting <pid>' while penmentor waits for you to write; read by a second penmentor
 
 CHOICES = {  # models as harness:model (which command-line agent runs it; see harness.py), effort levels, shared context

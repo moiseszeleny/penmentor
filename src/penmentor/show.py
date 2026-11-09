@@ -3,12 +3,12 @@ maths, and the history of every animation, which Settings → History brings bac
 import importlib.util
 import json
 import os
-import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+from . import instance
 from .config import CACHE, DATA, MANIM
 from .desktop import notify
 
@@ -47,14 +47,15 @@ def open_window(where, spec=None):
     pid = CACHE / 'plot.pid'
     try:
         old = int(pid.read_text())
-        if b'penmentor.plot' in Path(f'/proc/{old}/cmdline').read_bytes():  # never signal a stranger that reused the pid
-            os.kill(old, signal.SIGTERM)
+        if instance.is_ours(old, b'penmentor.plot'):  # never signal a stranger that reused the pid
+            instance.stop(old)
     except (OSError, ValueError):
         pass
     src = str(Path(__file__).resolve().parent.parent)  # works from a checkout too, not only when installed
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(filter(None, [src, os.environ.get('PYTHONPATH')])))
     with open(CACHE / 'plot.log', 'w') as log:
-        p = subprocess.Popen([python, '-m', 'penmentor.plot', str(JOB)], env=env, stdout=log, stderr=log, start_new_session=True, cwd=CACHE)
+        detach = dict(creationflags=0x08000200) if os.name == 'nt' else dict(start_new_session=True)  # no console; own group
+        p = subprocess.Popen([python, '-m', 'penmentor.plot', str(JOB)], env=env, stdout=log, stderr=log, cwd=CACHE, **detach)
     pid.write_text(str(p.pid))
 
 

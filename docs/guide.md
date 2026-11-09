@@ -4,8 +4,8 @@ Press a key while you work through maths by hand, and an AI model (Claude, Gemin
 marks work with coloured pens: rings round the mistake, ticks on the right lines, a faint ghost of the next step,
 arrows from cause to effect. Words are a last resort.
 
-Built for [xournal++](https://xournalpp.github.io/) and a pen tablet on Linux (X11, works best with i3), for calculus,
-but it reads whatever maths is on screen.
+Built for [xournal++](https://xournalpp.github.io/) and a pen tablet on Linux (X11, works best with i3) or Windows 10/11,
+for calculus, but it reads whatever maths is on screen.
 
 ## What it can do
 
@@ -103,6 +103,39 @@ uv pip install -p ~/.local/share/penmentor/manim/bin/python manimgl audioop-lts
 
 **Tablet buttons:** `penmentor --ask check` skips the menu; [contrib/wacom.sh](../contrib/wacom.sh) maps two pad buttons to it.
 
+### Windows 10/11
+
+No rofi, slop, xdotool or i3 needed: penmentor brings its own menu, region picker and notifications (small Qt windows,
+`picker.py`) and a tray icon that owns its keys (`penmentor --daemon`, `hotkeys.py`).
+
+1. Python 3.10+ (`winget install Python.Python.3.12`) and [xournal++](https://xournalpp.github.io/) 1.2 or newer
+   (`winget install Xournal++.Xournal++`).
+2. One agent, logged in once by running it: [Claude Code](https://claude.com/claude-code)
+   (`irm https://claude.ai/install.ps1 | iex`), Codex (`npm i -g @openai/codex`) or Antigravity.
+3. Optional, for real LaTeX and the CMU fonts: [MiKTeX](https://miktex.org/) (`winget install MiKTeX.MiKTeX`).
+4. From the checkout:
+
+   ```powershell
+   git clone https://github.com/moiseszeleny/penmentor $HOME\src\penmentor
+   powershell -ExecutionPolicy Bypass -File $HOME\src\penmentor\contrib\windows\install.ps1
+   ```
+
+   It makes a `.venv`, installs penmentor in it, copies the xournal++ plugin to `%LOCALAPPDATA%\xournalpp\plugins`,
+   puts the keys in your Startup folder, starts them, and runs the selftest. Restart xournal++ once.
+
+| Key | |
+|---|---|
+| Ctrl+Alt+Shift+A | the menu (also: click the tray icon) |
+| Ctrl+Alt+Shift+M | did I make any mistakes? (`--ask check`) |
+| Ctrl+Alt+Shift+S | solution check (`--ask final`) |
+
+Change them with `"hotkeys"` in `%LOCALAPPDATA%\penmentor\settings.json`, for example
+`{"hotkeys": {"ctrl+alt+shift+a": [], "win+f9": ["--ask", "hint"]}}`; map tablet pad buttons to those keys in the tablet's
+control panel. Everything penmentor keeps is in `%LOCALAPPDATA%\penmentor` (`cache\error.log` if something breaks).
+Display scaling (125 %, 150 %…) and monitors left of or above the main one are fine: penmentor works in physical pixels.
+Show me: make the manim venv at `%LOCALAPPDATA%\penmentor\data\manim` (`python -m venv ...`, then
+`...\Scripts\pip install manimgl`). `contrib\windows\install.ps1 -Uninstall` removes the keys again.
+
 ## Development
 
 ```sh
@@ -118,7 +151,8 @@ PYTHONPATH=src ~/.local/share/penmentor/manim/bin/python -m penmentor.plot --png
 | `cli.py` | entry point: capture, menu, settings |
 | `prompts.py` | everything the model is told, and the JSON schema it answers in |
 | `harness.py` | the `claude`, `agy` and `codex` calls, sessions, token and usage stats |
-| `desktop.py`, `xournal.py` | screenshots, monitors, i3 windows, rofi; the whole-page export |
+| `desktop.py`, `xournal.py` | screenshots, monitors, windows, menus (`desktop_x11.py`: i3, rofi, xdotool; `desktop_win.py`: Win32); the whole-page export |
+| `picker.py`, `hotkeys.py`, `instance.py` | Windows: the menu, region picker and toasts; the keys and tray icon; one penmentor at a time on both |
 | `page.py` | where the ink is: snapping boxes onto strokes, finding empty space |
 | `overlay.py`, `draw.py`, `style.py` | the marks over your live screen (a shaped window), the modes |
 | `typeset.py` | LaTeX (or mathtext) into images |

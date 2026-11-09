@@ -9,18 +9,20 @@ description = "A maths mentor at the tip of your pen: Claude marks your handwrit
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-dependencies = ["numpy", "scipy", "pillow", "PyQt6", "matplotlib"]
-keywords = ["xournal", "handwriting", "calculus", "tutor", "claude", "x11", "i3"]
+dependencies = ["numpy", "scipy", "pillow", "PyQt6", "matplotlib", "psutil; sys_platform == 'win32'"]
+keywords = ["xournal", "handwriting", "calculus", "tutor", "claude", "x11", "i3", "windows"]
 classifiers = [
     "Environment :: X11 Applications :: Qt",
     "Intended Audience :: Education",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
 
 [project.urls]
-Homepage = "https://github.com/AbdullahAlhariri/penmentor"
-Issues = "https://github.com/AbdullahAlhariri/penmentor/issues"
+Homepage = "https://github.com/moiseszeleny/penmentor"
+Issues = "https://github.com/moiseszeleny/penmentor/issues"
+Upstream = "https://github.com/AbdullahAlhariri/penmentor"
 
 [project.optional-dependencies]
 show = ["manimgl", "audioop-lts; python_version >= '3.13'"]  # Show me: 3Blue1Brown's manim (pydub needs audioop on 3.13+)

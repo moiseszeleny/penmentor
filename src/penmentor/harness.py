@@ -9,8 +9,10 @@ import base64
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -21,7 +23,8 @@ from .config import CACHE, CONF, SESSION
 from .prompts import SCHEMA, SYSTEM
 
 HARNESSES = {'claude': 'Claude Code', 'agy': 'Antigravity', 'codex': 'Codex'}
-BIN = {h: shutil.which(h) or str(Path.home() / '.local/bin' / h) for h in HARNESSES}  # i3's PATH may lack ~/.local/bin
+WIN = sys.platform == 'win32'
+BIN = {h: shutil.which(h) or str(Path.home() / '.local/bin' / (h + '.exe' * WIN)) for h in HARNESSES}  # i3's PATH may lack ~/.local/bin
 SEND_EDGE = 1568  # long edge of the images the model sees; its boxes come back in that space
 TURN = CACHE / 'turn'  # the screenshots as files, for the harnesses that take images as files
 VIEW_ONLY = ('Open these image files with your file viewer, in this order, and use only the file viewer: run no commands '
@@ -36,7 +39,26 @@ def pick(model=None):
 
 
 def installed():
-    return [h for h in HARNESSES if os.access(BIN[h], os.X_OK)]
+    return [h for h in HARNESSES if (Path(BIN[h]).is_file() if WIN else os.access(BIN[h], os.X_OK))]
+
+
+def command(path):
+    """How to start a harness binary. Windows: npm installs agents as .cmd shims, and cmd.exe would mangle the JSON
+    and the multi-line prompt in their arguments, so run the shim's node script directly; a .py runs in our Python."""
+    p = Path(path)
+    ext = p.suffix.lower()
+    if WIN and ext in ('.cmd', '.bat'):
+        try:
+            m = re.search(r'"%(?:~dp0|dp0)%\\?([^"]+\.(?:c?js|mjs))"', p.read_text(errors='replace'))
+        except OSError:
+            m = None
+        if m:
+            local = p.parent / 'node.exe'
+            return [str(local if local.exists() else shutil.which('node') or 'node'), str(p.parent / m[1])]
+        return [path]  # not an npm shim we know: let Windows run it (arguments may suffer)
+    if ext == '.py':
+        return [sys.executable, path]
+    return [path]
 
 
 def prepare(shot, boxes=()):
@@ -73,7 +95,10 @@ def stop():
 
 
 def run(cmd, stdin, cwd):
-    with subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd) as p:
+    cmd = command(cmd[0]) + cmd[1:]
+    extra = dict(creationflags=0x08000000) if WIN else {}  # CREATE_NO_WINDOW: no console flashing up
+    with subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd,
+                          encoding='utf-8', errors='replace', **extra) as p:
         RUNNING.add(p)
         try:
             return p.communicate(stdin, timeout=300)
@@ -215,6 +240,9 @@ def ask(shots, text, main=0, new_shot=True, keep=True, page=None):
     """shots: [(png, (w, h))] per monitor, left to right; main: the focused one; page: (png, label) of the whole xournal page.
     new_shot=False: a follow-up on the screenshots the model already has. keep=False: no shared context (offline tests)."""
     h, model = pick()
+    if not Path(BIN[h]).exists() and not shutil.which(BIN[h]):
+        raise RuntimeError(f'{HARNESSES[h]} ({h}) is not installed, or not on your PATH: install it and log in once, '
+                           'or pick another model in Settings')
     s = session() if keep else None
     sid = s['id'] if s and s.get('harness', 'claude') == h else None  # another harness can't pick up this conversation
     new_shot = new_shot or not sid

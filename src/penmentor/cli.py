@@ -6,6 +6,8 @@
   penmentor --test IMG [MODE|"question"]   offline: ask the model about IMG, writes IMG.penmentor.{json,png}
   penmentor --render IMG JSON        offline: redraw a saved answer (tune visuals without the model)
   penmentor --selftest
+  penmentor --install-plugin         copy the xournal++ plugin into xournal++'s plugin folder
+  penmentor --daemon                 Windows: the keys that start penmentor, with an icon in the tray (see hotkeys.py)
 
 The marks stay over your live screen while you keep writing; tap the buttons on their bar (or press the penmentor
 key again for the same as a menu): check new work, more help, ask, show me, what I read, stats, replay.
@@ -13,18 +15,16 @@ Esc stops penmentor at any point, the model included.
 Hover or tap a mark for its one-line "why".
 """
 import faulthandler
-import fcntl
 import json
 import os
-import signal
 import sys
 import time
 import traceback
 from pathlib import Path
 
-from . import harness, show, xournal
+from . import harness, instance, show, xournal
 from .config import CACHE, CHOICES, CONF, SESSION, STATE, save, set_state
-from .desktop import Oops, capture, notify, on_escape, rofi, select_region
+from .desktop import Oops, capture, notify, on_escape, origin, rofi, select_region
 from .prompts import BOX_QS, PRESETS, TASKS
 
 SETTINGS_ROW, CLEAR_ROW, HISTORY_ROW = '⚙  Settings', '✕  Clear context', 'history'
@@ -81,9 +81,9 @@ def nudge_running(what='menu'):
     button asks its question about the work on screen (a preset mode)."""
     try:
         state = STATE.read_text().split()
-        if state[0] == 'open' and b'penmentor' in Path(f'/proc/{int(state[1])}/cmdline').read_bytes():
+        if state[0] == 'open' and instance.is_ours(state[1], b'penmentor'):
             (CACHE / 'poke').write_text(what)
-            return os.kill(int(state[1]), signal.SIGUSR1)
+            return instance.nudge(state[1])
     except (OSError, ValueError, IndexError):
         pass
     notify('Still answering the last question…', ms=2500)
@@ -143,17 +143,31 @@ def offline(a):
     print(json.dumps(r, indent=1, ensure_ascii=False))
 
 
+def install_plugin():
+    """The xournal++ plugin, copied where xournal++ looks for plugins (restart xournal++ afterwards)."""
+    import shutil
+    src = Path(__file__).resolve().parent.parent.parent / 'xournalpp-plugin' / 'penmentor'
+    if not src.is_dir():
+        raise Oops(f'No plugin next to this penmentor ({src}): run it from a checkout of the repository.')
+    shutil.copytree(src, xournal.PLUGIN, dirs_exist_ok=True)
+    print(f'xournal++ plugin installed in {xournal.PLUGIN}\nRestart xournal++; Plugin > Plugin Manager should list "penmentor".')
+
+
 def main(a):
+    if a[:1] == ['--install-plugin']:
+        return install_plugin()
+    if a[:1] == ['--daemon']:
+        if sys.platform != 'win32':
+            raise Oops('penmentor --daemon is for Windows: on Linux bind penmentor to a key in your window manager (contrib/i3.conf).')
+        from .hotkeys import main as daemon
+        return daemon()
     if a[:1] == ['--selftest']:
         from .selftest import selftest
         return selftest()
     if a[:1] in (['--test'], ['--render']):
         return offline(a)
     CACHE.mkdir(parents=True, exist_ok=True)
-    lock = open(CACHE / 'lock', 'w')
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+    if not (lock := instance.lock(CACHE / 'lock')):  # kept open (and locked) until penmentor exits
         return nudge_running(a[1] if a[:1] == ['--ask'] and a[1:2] else 'menu')
     set_state('busy')
     if a[:1] == ['--last']:
@@ -161,7 +175,7 @@ def main(a):
     shot, screens, main_screen, wins = capture()  # before rofi draws over the screen
     page = xournal.PageRequest()  # now, while the keyboard still goes to xournal
     on_escape(lambda: (harness.stop(), os._exit(0)))  # Esc anywhere stops penmentor, even while the model thinks
-    geom = (0, 0, *shot.size)
+    geom = (*origin(), *shot.size)  # where the shot sits on the desktop (Windows: left/upper monitors are negative)
     on = CONF['context'] == 'on'
     if a[:1] == ['--ask']:  # a tablet button: straight to the question
         choice = next((label for label, m in PRESETS if a[1:2] == [m]), None)
@@ -212,5 +226,5 @@ def run():
     except Exception as ex:
         CACHE.mkdir(parents=True, exist_ok=True)
         (CACHE / 'error.log').write_text(traceback.format_exc())
-        notify(f'{type(ex).__name__}: {str(ex)[:200]}\nDetails: ~/.cache/penmentor/error.log', critical=True, title='penmentor crashed')
+        notify(f'{type(ex).__name__}: {str(ex)[:200]}\nDetails: {CACHE / "error.log"}', critical=True, title='penmentor crashed')
         raise

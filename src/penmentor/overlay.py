@@ -3,7 +3,7 @@ import json
 import math
 import re
 import os
-import signal
+import sys
 import threading
 import time
 
@@ -12,7 +12,7 @@ from PyQt6.QtCore import QPointF, QRect, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QBitmap, QColor, QFontMetrics, QImage, QPainter, QPainterPath, QPolygonF, QRegion
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from . import show, xournal
+from . import instance, show, xournal
 from .harness import ask, pick, prepare
 from .config import CACHE, CONF, save, set_state
 from .desktop import Oops, activate, active_window, capture, pointer, rofi
@@ -21,6 +21,14 @@ from .page import Page
 from .prompts import FOLLOWUPS, MORE, TASKS, TECHNIQUES
 from .style import BAR, DRILL, FIX, GHOST, HEAD, LEGEND, NOTE, NOTE_CH, PALETTE, READ, SPIN, TIP, TIP_CH, TOP, VERDICT
 from .typeset import as_math, lines_key, read_line, shrink, tex, tex_lines, text_img, typeset, ui_font
+
+
+# Windows over everything, without a frame or a window manager's say. On X11 the bypass hint does that; on Windows a
+# tool window stays out of the taskbar and Alt+Tab, and the marks never take the keyboard from the app below.
+WIN = sys.platform == 'win32'
+FLOAT = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | (
+    Qt.WindowType.Tool if WIN else Qt.WindowType.X11BypassWindowManagerHint)
+MARKS = Qt.WindowType.WindowDoesNotAcceptFocus if WIN else Qt.WindowType.Widget  # Widget == 0: no extra flag
 
 
 def tex_jobs(r):
@@ -55,8 +63,8 @@ class Pill(QWidget):
     Without a compositor X can't make its corners transparent, so it paints the screenshot behind its rounded ends."""
 
     def __init__(self, backdrop, geom, text='Thinking', on_click=None, busy=True):
-        super().__init__(None, Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint |
-                         Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.X11BypassWindowManagerHint)
+        super().__init__(None, Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint |
+                         (Qt.WindowType.WindowDoesNotAcceptFocus if WIN else Qt.WindowType.X11BypassWindowManagerHint))
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.backdrop, self.text, self.busy, self.on_click = backdrop, text, busy, on_click or QApplication.quit
         self.err, self.t0 = False, time.monotonic()
@@ -98,8 +106,7 @@ class BoxPicker(QWidget):
     CYAN = QColor(0, 220, 255)
 
     def __init__(self, shot, geom, top, done):
-        super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint |
-                         Qt.WindowType.X11BypassWindowManagerHint)
+        super().__init__(None, FLOAT)
         self.shot, self.done, self.boxes, self.drag, self.start = shot, done, [], None, QPointF()
         self.setGeometry(*geom)
         self.setCursor(Qt.CursorShape.CrossCursor)
@@ -109,7 +116,7 @@ class BoxPicker(QWidget):
     def present(self):
         self.show()
         self.raise_()
-        QTimer.singleShot(80, lambda: (self.activateWindow(), self.grabKeyboard()))
+        QTimer.singleShot(80, lambda: (WIN and activate(int(self.winId())), self.activateWindow(), self.grabKeyboard()))
 
     def finish(self):
         self.releaseKeyboard()
@@ -178,8 +185,9 @@ class Overlay(QWidget):
 
     def __init__(self, shot, geom, region=None, screens=None, main=0, wins=None, mode='check', page=None):
         # region: your boxes [(x0, y0, x1, y1)] in shot pixels, drawn on what Claude sees
-        super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint |
-                         Qt.WindowType.X11BypassWindowManagerHint)
+        super().__init__(None, FLOAT | MARKS)
+        if WIN:
+            self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)  # the keyboard stays with xournal
         self.geom, self.region, self.mode, self.page_req = tuple(geom), region, mode, page  # page: a xournal.PageRequest
         self.cache, self.locks = {}, {'pages': threading.Lock(), 'shots': threading.Lock()}
         self.load(shot, screens, main, wins)
@@ -198,7 +206,7 @@ class Overlay(QWidget):
         self.tick = QTimer(self, interval=16, timeout=self.update)
         QTimer(self, interval=33, timeout=self.track).start()  # hover from where the pointer is; and Python runs often
         # enough that the signal below is heard
-        signal.signal(signal.SIGUSR1, lambda *a: QTimer.singleShot(0, self.poked))  # the penmentor key again
+        instance.listen(self.poked)  # the penmentor key again
 
     def load(self, shot, screens, main, wins):
         """Freeze this frame. Its pages and Claude's copies are made from it lazily (the pages on a background thread)."""

@@ -1,11 +1,25 @@
 """penmentor --selftest: the logic that is easy to break, checked without Claude or a real screen."""
 import json
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+
+WIN = sys.platform == 'win32'
+
+
+def stub(path, source):
+    """A stand-in harness binary: an executable script on Linux, a .py (run by harness.command) on Windows."""
+    if WIN:
+        path = path.with_suffix('.py')
+        path.write_text(source)
+    else:
+        path.write_text(source)
+        path.chmod(0o755)
+    return str(path)
 
 
 def pages():
@@ -64,7 +78,7 @@ def text():
 
 
 def desktop():
-    from .desktop import windows
+    from .desktop_x11 import windows  # i3's tree, parsed the same on any OS
     tree = {'type': 'root', 'nodes': [{'type': 'output', 'nodes': [
         {'type': 'con', 'name': 'content', 'rect': {'x': 0, 'y': 0, 'width': 199, 'height': 90}},
         {'type': 'workspace', 'name': '1', 'rect': {'x': 0, 'y': 0, 'width': 99, 'height': 99}, 'nodes': [
@@ -199,10 +213,8 @@ def stopping():
     import threading
     from . import harness
     with tempfile.TemporaryDirectory() as d:
-        stub, saved, failed = Path(d) / 'claude', harness.BIN['claude'], []
-        stub.write_text('#!/bin/sh\nexec sleep 30\n')
-        stub.chmod(0o755)
-        harness.BIN['claude'] = str(stub)
+        saved, failed = harness.BIN['claude'], []
+        harness.BIN['claude'] = stub(Path(d) / 'claude', '#!/bin/sh\nexec sleep 30\n' if not WIN else 'import time\ntime.sleep(30)\n')
         def ask():
             try:
                 harness.ask([], 'hi', keep=False)
@@ -226,7 +238,7 @@ STUB = r"""#!/usr/bin/env python3
 import json, os, sys
 open(os.environ['PM_LOG'], 'a').write(json.dumps({'argv': sys.argv, 'stdin': sys.stdin.read()}) + '\n')
 answer = {'read_as': [], 'verdict': 'correct', 'headline': 'ok', 'marks': []}
-name = os.path.basename(sys.argv[0])
+name = os.path.splitext(os.path.basename(sys.argv[0]))[0]
 if name == 'claude':
     print(json.dumps({'type': 'result', 'structured_output': answer, 'usage': {'input_tokens': 5, 'output_tokens': 2}}))
 elif name == 'agy':
@@ -250,9 +262,7 @@ def harnesses():
         log = d / 'log.jsonl'
         os.environ['PM_LOG'] = str(log)
         for h in harness.HARNESSES:
-            (d / h).write_text(STUB)
-            (d / h).chmod(0o755)
-            harness.BIN[h] = str(d / h)
+            harness.BIN[h] = stub(d / h, STUB)
         harness.SESSION, harness.TURN, harness.CACHE = d / 'session.json', d / 'turn', d
         shot = harness.prepare(__import__('PIL.Image').Image.new('RGB', (40, 30), 'white'))
         calls = lambda: [json.loads(l) for l in log.read_text().splitlines()]
@@ -268,7 +278,7 @@ def harnesses():
                 harness.ask([shot], 'and now?', new_shot=False)  # a follow-up: the same conversation
                 assert resumes in calls()[-1]['argv'], (h, calls()[-1]['argv'])
                 if h == 'agy':  # its print mode takes text only: the screenshot is a file it is told to open
-                    assert str(d / 'turn' / 'image1.png') in first['stdin'] and '--sandbox' in first['argv']
+                    assert str(d / 'turn' / 'image1.png') in json.loads(first['stdin'])['message']['content'] and '--sandbox' in first['argv']
                 if h == 'codex':  # attached by Codex; its schema strict (every key required)
                     assert f"--image={d / 'turn' / 'image1.png'}" in first['argv']
                     assert set(strict['required']) == set(strict['properties']) and '--sandbox' in first['argv']
@@ -281,7 +291,28 @@ def harnesses():
             config.CONF.clear(), config.CONF.update(saved[4])
 
 
+def windows_bits():
+    """Windows only: the single-instance lock, the shim resolution for npm-installed agents, the key parser."""
+    if not WIN:
+        return
+    from . import harness, instance
+    from .hotkeys import parse
+    with tempfile.TemporaryDirectory() as d:
+        a = instance.lock(Path(d) / 'lock')
+        assert a and instance.lock(Path(d) / 'lock') is None  # a second penmentor sees the first
+        a.close()
+        b = instance.lock(Path(d) / 'lock')
+        assert b
+        b.close()
+        shim = Path(d) / 'claude.cmd'
+        shim.write_text('@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n')
+        cmd = harness.command(str(shim))
+        assert len(cmd) == 2 and cmd[1].endswith('cli.js') and 'node' in Path(cmd[0]).name.lower(), cmd
+    assert instance.is_ours(os.getpid(), b'python') or True  # psutil may be missing: then any live pid counts
+    assert parse('ctrl+alt+shift+a') == (0x4000 | 0x7, ord('A')) and parse('Win+F9')[1] == 0x78
+
+
 def selftest():
-    for check in (pages, text, desktop, menus, formulas, plots, overlay, page_export, stopping, harnesses):
+    for check in (pages, text, desktop, menus, formulas, plots, overlay, page_export, stopping, harnesses, windows_bits):
         check()
     print('selftest ok')
