@@ -30,16 +30,28 @@ CHOICES = {  # models as harness:model (which command-line agent runs it; see ha
     'subject': [('calculus', 'integrals, limits, series'), ('physics', 'maths and theoretical physics')],  # prompts.py
 }
 CONF = {'model': 'claude:opus', 'effort': 'medium', 'context': 'on', 'subject': 'calculus', 'stats': False, 'read': False}  # stats/read: s and t panels, kept on between questions
-try:
-    CONF |= json.loads(SETTINGS.read_text())
-except (OSError, ValueError):
-    pass
+
+
+def load():
+    """Settings as the file has them now, over what this process knows."""
+    try:
+        CONF.update(json.loads(SETTINGS.read_text()))
+    except (OSError, ValueError):
+        pass
+    return CONF
+
+
+load()
 
 
 def save(**kw):
-    CONF.update(kw)
+    """Change settings and write them. The file is read again first: another penmentor (marks still up, the keys in
+    the tray) may have saved since this one started, and its changes must not be undone."""
+    load().update(kw)
     SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS.write_text(json.dumps(CONF))
+    tmp = SETTINGS.with_suffix('.tmp')
+    tmp.write_text(json.dumps(CONF))
+    tmp.replace(SETTINGS)  # whole or not at all
 
 
 def set_state(s):

@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from ctypes import wintypes
 from pathlib import Path
 
@@ -39,9 +40,7 @@ user32.GetWindowLongW.argtypes = [HWND, ctypes.c_int]
 user32.GetClassNameW.argtypes = [HWND, wintypes.LPWSTR, ctypes.c_int]
 user32.GetWindowTextLengthW.argtypes = [HWND]
 user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
-user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, WPARAM, LPARAM]
-user32.CallNextHookEx.restype = LRESULT
-user32.SetWindowsHookExW.restype = ctypes.c_void_p
+user32.GetAsyncKeyState.restype = ctypes.c_short
 user32.keybd_event.argtypes = [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, ctypes.c_size_t]
 dwmapi.DwmGetWindowAttribute.argtypes = [HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
 kernel32.OpenProcess.restype = wintypes.HANDLE
@@ -306,22 +305,17 @@ def press(keys):
 
 
 def on_escape(callback):
-    """callback() on a thread whenever Escape is pressed, wherever the focus is. A low-level keyboard hook: the key
-    still reaches your apps (and penmentor's own menus), so Esc stops penmentor while the model thinks."""
-    HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, WPARAM, LPARAM)
-
-    def hook(code, wparam, lparam):
-        if code == 0 and wparam in (0x100, 0x104) and ctypes.cast(lparam, ctypes.POINTER(wintypes.DWORD))[0] == 0x1B:
-            threading.Thread(target=callback, daemon=True).start()  # never block the hook: Windows drops slow ones
-        return user32.CallNextHookEx(None, code, wparam, lparam)
-    on_escape.proc = HOOKPROC(hook)  # kept alive: Windows calls it later
-
+    """callback() on a thread whenever Escape is pressed, wherever the focus is; the key still reaches your apps
+    (and penmentor's own menus), so Esc stops penmentor while the model thinks.
+    Windows is asked 30 times a second rather than hooked: a keyboard hook would put every key you type through this
+    Python process, slowing your typing whenever it is busy, and Windows silently drops hooks that answer late."""
     def loop():
-        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wintypes.HMODULE, wintypes.DWORD]
-        if not user32.SetWindowsHookExW(13, on_escape.proc, kernel32.GetModuleHandleW(None), 0):  # WH_KEYBOARD_LL
-            return
-        msg = wintypes.MSG()
-        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:  # the hook runs inside this thread's message loop
-            user32.TranslateMessage(ctypes.byref(msg))
-            user32.DispatchMessageW(ctypes.byref(msg))
+        down = bool(user32.GetAsyncKeyState(0x1B) & 0x8000)  # still held from closing a menu: not a new press
+        while True:
+            time.sleep(.03)
+            state = user32.GetAsyncKeyState(0x1B)  # high bit: down now; low bit: pressed since we last asked (a quick tap)
+            now = bool(state & 0x8000)
+            if (now or state & 1) and not down:
+                threading.Thread(target=callback, daemon=True).start()
+            down = now
     threading.Thread(target=loop, daemon=True).start()

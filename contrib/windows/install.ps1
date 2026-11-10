@@ -1,18 +1,26 @@
 # penmentor on Windows: a venv for it, the xournal++ plugin, and its keys started with Windows.
 # From the checkout:   powershell -ExecutionPolicy Bypass -File contrib\windows\install.ps1
-# Re-running it is safe. Remove the keys again with:   contrib\windows\install.ps1 -Uninstall
+# Re-running it is safe (it updates everything and restarts the keys). Remove the keys again with:
+#   contrib\windows\install.ps1 -Uninstall
 param([switch]$Uninstall)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path "$PSScriptRoot\..\..").Path
-$venv = Join-Path $repo '.venv'
+# the venv lives with penmentor's other files, not in the checkout: 500 MB and 11 000 files that a checkout in
+# OneDrive (the Desktop, Documents) would upload and slow down
+$venv = Join-Path $env:LOCALAPPDATA 'penmentor\venv'
 $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'penmentor keys.lnk'
+
+function Stop-Keys {
+    Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" |
+        Where-Object { $_.CommandLine -like '*penmentor*--daemon*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
+}
 
 if ($Uninstall) {
     if (Test-Path $startup) { Remove-Item $startup }
-    Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" |
-        Where-Object { $_.CommandLine -like '*penmentor*--daemon*' } |
-        ForEach-Object { Stop-Process -Id $_.ProcessId }
+    Stop-Keys
     Write-Host 'penmentor keys removed from startup and stopped.'
+    Write-Host "Its Python environment is still in $venv (delete the folder to remove it)."
     return
 }
 
@@ -34,6 +42,8 @@ $lnk.Arguments = '-m penmentor --daemon'
 $lnk.WorkingDirectory = $repo
 $lnk.Description = 'penmentor: the keys that start it'
 $lnk.Save()
+Stop-Keys  # an older one, with the keys and the Python it started with
+Start-Sleep -Milliseconds 500
 # started by Explorer, through the shortcut: not a child of this terminal, so closing it (or the app that opened it)
 # doesn't take the keys down with it
 Start-Process explorer.exe -ArgumentList "`"$startup`""
@@ -41,4 +51,6 @@ Start-Process explorer.exe -ArgumentList "`"$startup`""
 Write-Host ''
 Write-Host 'Done. Ctrl+Alt+Shift+A asks (menu), Ctrl+Alt+Shift+M checks for mistakes, Ctrl+Alt+Shift+S checks the solution.'
 Write-Host 'Restart xournal++ once so it loads the plugin. You also need one agent logged in: claude, codex or agy.'
+$old = Join-Path $repo '.venv'
+if (Test-Path $old) { Write-Host "An older environment is still in $old : penmentor no longer uses it, you can delete that folder." }
 & $py -m penmentor --selftest

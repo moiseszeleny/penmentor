@@ -121,6 +121,11 @@ def menus():
             cli.settings(None)
             assert config.CONF['effort'] == 'high' and config.CONF['model'] == 'claude-sonnet-5-5', config.CONF
             assert json.loads(config.SETTINGS.read_text()) == config.CONF
+            # another penmentor saved meanwhile (the tray, marks still up): saving here keeps its change
+            config.SETTINGS.write_text(json.dumps(dict(config.CONF, subject='physics')))
+            config.save(stats=True)
+            assert config.CONF['subject'] == 'physics' and config.CONF['stats'] and config.CONF['effort'] == 'high'
+            assert json.loads(config.SETTINGS.read_text()) == config.CONF
             # two animations shown → settings → history → the older one plays again
             for title in ('Area under $e^{-x}$', 'Riemann sums'):
                 show.HISTORY.write_text((show.HISTORY.read_text() if show.HISTORY.exists() else '') +
@@ -327,6 +332,24 @@ def windows_bits():
         shim.write_text('@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n')
         cmd = harness.command(str(shim))
         assert len(cmd) == 2 and cmd[1].endswith('cli.js') and 'node' in Path(cmd[0]).name.lower(), cmd
+        looked = []
+        real, harness.find = harness.find, lambda h: looked.append(h) or f'/bin/{h}'
+        try:
+            bins = harness.Bins()  # binaries are searched for when first needed, once
+            assert not looked and bins['codex'] == bins['codex'] == '/bin/codex' and looked == ['codex']
+        finally:
+            harness.find = real
+    # Esc is polled: held since before we listened is no press; a quick tap between two looks and a held key are one each
+    from . import desktop_win as W
+    states, presses = iter([0x8000, 0x8001, 0, 1, 0x8000, 0x8001, 0]), []
+    real_user32 = W.user32
+    W.user32 = type('U', (), {'GetAsyncKeyState': staticmethod(lambda vk: next(states, 0))})
+    try:
+        W.on_escape(lambda: presses.append(1))
+        time.sleep(.5)
+    finally:
+        W.user32 = real_user32
+    assert len(presses) == 2, presses
     assert instance.is_ours(os.getpid(), b'python') or True  # psutil may be missing: then any live pid counts
     assert parse('ctrl+alt+shift+a') == (0x4000 | 0x7, ord('A')) and parse('Win+F9')[1] == 0x78
 

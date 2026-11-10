@@ -140,8 +140,10 @@ No rofi, slop, xdotool or i3 needed: penmentor brings its own menu, region picke
    powershell -ExecutionPolicy Bypass -File $HOME\src\penmentor\contrib\windows\install.ps1
    ```
 
-   It makes a `.venv`, installs penmentor in it, copies the xournal++ plugin to `%LOCALAPPDATA%\xournalpp\plugins`,
-   puts the keys in your Startup folder, starts them, and runs the selftest. Restart xournal++ once.
+   It makes a Python environment in `%LOCALAPPDATA%\penmentor\venv` (not in the checkout, so a checkout in OneDrive
+   doesn't upload it), installs penmentor in it, copies the xournal++ plugin to `%LOCALAPPDATA%\xournalpp\plugins`,
+   puts the keys in your Startup folder, starts them, and runs the selftest. Restart xournal++ once. Run it again
+   after a `git pull`: it updates everything and restarts the keys.
 
 | Key | |
 |---|---|
