@@ -13,8 +13,6 @@ import threading
 from ctypes import wintypes
 from pathlib import Path
 
-from PIL import ImageGrab
-
 user32 = ctypes.WinDLL('user32', use_last_error=True)
 kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
 dwmapi = ctypes.WinDLL('dwmapi')
@@ -63,10 +61,26 @@ def sh(*cmd):
 
 # ---------- helper processes: menus, region picker, notifications (picker.py) ----------
 
+def helper_env():
+    src = str(Path(__file__).resolve().parent.parent)  # works from a checkout too
+    return dict(os.environ, PYTHONPATH=os.pathsep.join(filter(None, [src, os.environ.get('PYTHONPATH')])), PYTHONIOENCODING='utf-8')
+
+
+WARM = {}  # prompt -> a menu process started early by prewarm(), waiting for its rows
+
+
+def prewarm(prompt):
+    """Start the menu's process now, so it loads Python and Qt (0.8 s) while penmentor imports and takes the
+    screenshot. It shows nothing until rofi() sends its rows, so it is not in the screenshot; if they never come
+    (penmentor stopped, or its marks were already up) it goes away by itself."""
+    WARM[prompt] = subprocess.Popen([sys.executable, '-m', 'penmentor.picker', 'menu', prompt, '--warm'], env=helper_env(),
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                    encoding='utf-8', creationflags=NO_WINDOW)
+
+
 def helper(*args, stdin=None, wait=True):
-    """Run `python -m penmentor.picker ARGS` (works from a checkout too): (returncode, stdout) or the Popen."""
-    src = str(Path(__file__).resolve().parent.parent)
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(filter(None, [src, os.environ.get('PYTHONPATH')])), PYTHONIOENCODING='utf-8')
+    """Run `python -m penmentor.picker ARGS`: (returncode, stdout) or the Popen."""
+    env = helper_env()
     exe = sys.executable
     if not wait:
         pyw = Path(exe).with_name('pythonw.exe')
@@ -85,6 +99,11 @@ def notify(msg, ms=None, critical=False, title='penmentor'):
 
 def rofi(options, prompt):
     """The picked (or typed) row, None on Esc. No options: a plain text box."""
+    warm = WARM.pop(prompt, None)
+    if warm and options and warm.poll() is None:
+        user32.AllowSetForegroundWindow(-1)
+        out = warm.communicate('\n'.join(options))[0]
+        return out.strip() if warm.returncode == 0 else None
     code, out = helper('menu', prompt, stdin='\n'.join(options))
     return out.strip() if code == 0 else None
 
@@ -171,6 +190,7 @@ def windows():
 def capture():
     """Everything on screen: (desktop image, monitors left to right, index of the focused one, visible windows),
     monitors and windows in shot pixels."""
+    from PIL import ImageGrab  # here: the menu, toasts and the keys import this module and never take a screenshot
     try:
         shot = ImageGrab.grab(all_screens=True).convert('RGB')  # the whole virtual desktop, no cursor
     except OSError:

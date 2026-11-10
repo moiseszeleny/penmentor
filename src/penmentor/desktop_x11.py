@@ -161,6 +161,10 @@ def select_region(geom):
     return (x - geom[0], y - geom[1], x - geom[0] + w, y - geom[1] + h)
 
 
+def prewarm(prompt):
+    """Windows starts its menu's process early; rofi is up in no time, so nothing to do here."""
+
+
 def origin():
     """Where the screenshot's top-left pixel sits on the desktop: the X screen starts at (0, 0)."""
     return 0, 0

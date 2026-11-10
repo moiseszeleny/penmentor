@@ -47,7 +47,16 @@ def find(h):
             or str(Path.home() / '.local/bin' / (h + '.exe' * WIN)))
 
 
-BIN = {h: find(h) for h in HARNESSES}
+class Bins(dict):
+    """harness -> its binary, looked up when first needed: searching PATH costs 0.3 s on Windows, and most starts
+    of penmentor (the menu, a second key press) never ask the model."""
+
+    def __missing__(self, h):
+        self[h] = find(h)
+        return self[h]
+
+
+BIN = Bins()
 SEND_EDGE = 1568  # long edge of the images the model sees; its boxes come back in that space
 TURN = CACHE / 'turn'  # the screenshots as files, for the harnesses that take images as files
 VIEW_ONLY = ('Open these image files with your file viewer, in this order, and use only the file viewer: run no commands '

@@ -1,6 +1,7 @@
 """Windows stand-ins for rofi, slop and notify-send, each a small Qt window in its own process (desktop_win runs them):
 
   python -m penmentor.picker menu PROMPT      rows on stdin; prints the picked (or typed) row, exit 1 on Esc
+                                              (--warm after PROMPT: no rows means "never mind", not a text box)
   python -m penmentor.picker region           drag a box; prints "x y w h" in desktop pixels, exit 1 on Esc
   python -m penmentor.picker toast TITLE MSG MS CRITICAL
 
@@ -186,7 +187,9 @@ def main(a):
     app = QApplication(sys.argv[:1])
     app.setQuitOnLastWindowClosed(True)
     if a[:1] == ['menu']:
-        rows = [r for r in sys.stdin.read().split('\n') if r]
+        rows = [r for r in sys.stdin.read().split('\n') if r]  # --warm: started early, the rows come when penmentor is ready
+        if '--warm' in a[2:] and not rows:  # penmentor went away without asking
+            return 1
         w = Menu(rows, a[1] if len(a) > 1 else '')
     elif a[:1] == ['region']:
         w = Region()
