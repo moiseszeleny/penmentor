@@ -23,12 +23,17 @@ class Page:
         self.h, self.w = occ.shape
         # app chrome = thick long bands (toolbars, status bar, panel frames); the page is the open area around
         # the window centre, and whatever the chrome walls off from it (a sidebar) is off-limits too
-        solid = ndimage.binary_opening(occ, np.ones((9, 9), bool)) & (hrun | vrun)
+        # a 9x9 opening, as four 1-D passes (a square is separable): the same pixels in a third of the time
+        o = occ.view(np.uint8)
+        for f1d in (ndimage.minimum_filter1d, ndimage.maximum_filter1d):
+            for ax in (0, 1):
+                o = f1d(o, 9, axis=ax, mode='constant')
+        solid = o.astype(bool) & (hrun | vrun)
         lab, _ = ndimage.label(~solid)
         mid = lab[h // 2, w // 2]
         chrome = (lab != mid) if mid else solid
         # notes may cover ruled lines, never handwriting or chrome
-        integral = lambda m: np.pad(m.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+        integral = lambda m: np.pad(m.cumsum(0, dtype=np.int32).cumsum(1), ((1, 0), (1, 0)))  # int32: enough for any screen
         self.sum, self.chrome_sum = integral(ndimage.binary_dilation(self.ink, iterations=8) | chrome), integral(chrome)
 
     def local(self, r):

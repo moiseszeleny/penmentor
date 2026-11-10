@@ -76,9 +76,24 @@ def text():
     if typeset.LATEX:
         ks = [(r'$\iff$ ok', 19), (r'$\nosuchcmd x$', 19), (r'$\frac{1}{2$', 19), (r'$|x|=\begin{cases}x\\-x\end{cases}$', 19),
               (r'$\Tr(\slashed{p}\gamma^\mu)$, $\braket{\phi|\psi}$, $\pdv{L}{\dot q}=\comm{x}{p}$', 19)]
-        run_latex(ks)
-        assert [typeset._typeset[k] is not None for k in ks] == [True, False, False, True, True], [typeset._typeset[k] for k in ks]
-        assert typeset._typeset[ks[3]].height() > typeset._typeset[ks[0]].height()  # the cases page really is the cases page
+        saved = typeset.TEX_CACHE, typeset.subprocess, dict(typeset._typeset)
+        with tempfile.TemporaryDirectory() as d:
+            typeset.TEX_CACHE = Path(d)
+            try:
+                typeset._typeset.clear()
+                run_latex(ks)
+                masks = dict(typeset._typeset)
+                assert [masks[k] is not None for k in ks] == [True, False, False, True, True], masks
+                assert masks[ks[3]].height() > masks[ks[0]].height()  # the cases page really is the cases page
+                # typeset once ever: a new penmentor finds the masks on disk and runs no LaTeX for them
+                assert len(list(Path(d).glob('*.png'))) == 3
+                typeset._typeset.clear()
+                typeset.subprocess = None
+                run_latex([ks[0], ks[3]])
+                assert all(typeset._typeset[k].size() == masks[k].size() for k in (ks[0], ks[3]))
+            finally:
+                typeset.TEX_CACHE, typeset.subprocess = saved[:2]
+                typeset._typeset.clear(), typeset._typeset.update(saved[2])
 
 
 def desktop():
@@ -290,7 +305,7 @@ def harnesses():
             harness.ask([shot], 'and now?', new_shot=False)
             assert '--conversation' not in calls()[-1]['argv'] and 'image1.png' in calls()[-1]['stdin']
         finally:
-            harness.BIN.update(saved[0])
+            harness.BIN.clear(), harness.BIN.update(saved[0])  # the ones not looked up yet stay that way
             harness.SESSION, harness.TURN, harness.CACHE = saved[1:4]
             config.CONF.clear(), config.CONF.update(saved[4])
 

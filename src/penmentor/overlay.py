@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from PyQt6.QtCore import QPointF, QRect, QRectF, Qt, QTimer, pyqtSignal
@@ -20,7 +21,7 @@ from .draw import arrowhead, curve, edge, line_pts, panel, pen, qrect, ring, rin
 from .page import Page
 from .prompts import FOLLOWUPS, MORE, TASKS, TECHNIQUES
 from .style import BAR, DRILL, FIX, GHOST, HEAD, LEGEND, NOTE, NOTE_CH, PALETTE, READ, SPIN, TIP, TIP_CH, TOP, VERDICT
-from .typeset import as_math, lines_key, read_line, shrink, tex, tex_lines, text_img, typeset, ui_font
+from .typeset import LATEX, as_math, lines_key, read_line, shrink, tex, tex_lines, text_img, typeset, ui_font
 
 
 # Windows over everything, without a frame or a window manager's say. On X11 the bypass hint does that; on Windows a
@@ -40,7 +41,15 @@ def tex_jobs(r):
             jobs.append((as_math(m['write']), GHOST if m['shape'] == 'ghost' else FIX))
     d = r.get('drill') or {}
     jobs += [lines_key(display(d.get('problem')), DRILL, 60)] + [(display(l), DRILL) for l in [*(d.get('lines') or []), d.get('fix')]]
+    if d:  # the headlines a tap on a drill line may bring
+        jobs += [('Found it', HEAD), (f"It was line {drill_wrong(d) + 1}", HEAD)]
     return [j for j in jobs + [lines_key(d.get('why'), TIP, TIP_CH)] if j[0]]
+
+
+def drill_wrong(d):
+    """0-based line of a drill's planted mistake (0 if the model gave none that fits)."""
+    w, n = d.get('wrong'), len([l for l in d.get('lines') or [] if isinstance(l, str)])
+    return w if isinstance(w, int) and not isinstance(w, bool) and 0 <= w < n else 0
 
 
 def display(s):
@@ -53,9 +62,20 @@ def qimage(pil):
 
 
 def save_last(ov, result):
-    ov.shot_pil.save(CACHE / 'last.png', compress_level=1)  # the whole desktop: fast beats small
-    (CACHE / 'last.json').write_text(json.dumps({'geom': ov.geom, 'screens': ov.screens, 'main': ov.main,
-                                                 'wins': ov.wins, 'mode': ov.mode, 'result': result}))
+    """For penmentor --last. On a thread (the PNG of a whole desktop takes a moment); each file whole or not at all."""
+    shot, meta = ov.shot_pil, json.dumps({'geom': ov.geom, 'screens': ov.screens, 'main': ov.main,
+                                          'wins': ov.wins, 'mode': ov.mode, 'result': result})
+
+    def write():
+        with SAVING:
+            shot.save(CACHE / 'last.tmp.png', compress_level=1)  # fast beats small
+            (CACHE / 'last.tmp.json').write_text(meta)
+            (CACHE / 'last.tmp.png').replace(CACHE / 'last.png')
+            (CACHE / 'last.tmp.json').replace(CACHE / 'last.json')
+    threading.Thread(target=write).start()  # not a daemon: Esc right after the answer still leaves a whole pair
+
+
+SAVING = threading.Lock()
 
 
 class Pill(QWidget):
@@ -234,7 +254,9 @@ class Overlay(QWidget):
             bare = [(x, y, w, h) for x, y, w, h in self.screens
                     if not any(x <= a + c / 2 < x + w and y <= b + d / 2 < y + h for a, b, c, d in self.wins)]
             rects = [(max(x, 0), max(y, 0), min(x + w, W), min(y + h, H)) for x, y, w, h in self.wins + bare]
-            return [Page(np.asarray(shot.crop(r)), r[:2]) for r in rects if r[2] > r[0] and r[3] > r[1]]
+            rects = [r for r in rects if r[2] > r[0] and r[3] > r[1]]
+            with ThreadPoolExecutor(4) as pool:  # side by side: numpy and scipy let go of the GIL
+                return list(pool.map(lambda r: Page(np.asarray(shot.crop(r)), r[:2]), rects))
         return self.per_frame('pages', make)
 
     @property
@@ -277,6 +299,10 @@ class Overlay(QWidget):
                 r = ask(self.shots, text, self.main, new_shot, page=page and page.result())
             except Exception as ex:
                 r = {'error': str(ex)[:300]}
+            try:  # here, not in the Qt thread: LaTeX takes seconds (MiKTeX: 3), and the spinner keeps turning meanwhile
+                typeset(tex_jobs(r)) if LATEX else __import__('matplotlib.mathtext')
+            except Exception:
+                pass  # set_result typesets what is missing
             self.done.emit(r)
         threading.Thread(target=work, daemon=True).start()
 

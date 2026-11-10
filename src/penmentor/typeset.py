@@ -1,6 +1,8 @@
 """Text with maths as images: real LaTeX when installed (Computer Modern via latex + dvipng), else matplotlib's mathtext."""
 import functools
+import hashlib
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -10,6 +12,7 @@ from pathlib import Path
 from PyQt6.QtCore import QRect, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QImage, QPainter
 
+from .config import CACHE
 from .style import DRILL, FIX, GHOST, HEAD, NOTE, READ, TIP, UI_FONT
 
 LATEX = bool(shutil.which('latex') and shutil.which('dvipng'))  # real LaTeX if installed, else matplotlib's imitation
@@ -105,6 +108,36 @@ PREAMBLE = r"""\documentclass{article}
                                 for z in sorted({HEAD, NOTE, GHOST, FIX, TIP, READ, DRILL})) + r"\begin{document}"
 SS, GAMMA = 3, '1.6'  # LaTeX supersampling factor, dvipng gamma
 _typeset = {}  # (text, size) -> alpha mask from LaTeX, None if LaTeX choked on it
+TEX_CACHE, TEX_KEEP = CACHE / 'tex', 500  # the masks as PNGs, so a text is typeset once ever: LaTeX takes 1 to 3 s a run
+
+
+def on_disk(key):
+    """Where the mask of (text, size) is kept: named after everything that decides how it looks."""
+    return TEX_CACHE / (hashlib.sha1(repr((PREAMBLE, SS, GAMMA, key)).encode()).hexdigest() + '.png')
+
+
+def from_disk(key):
+    try:
+        img = QImage(str(on_disk(key)))
+        if img.isNull():
+            return None
+        os.utime(on_disk(key))  # used now: the last to go when the cache is trimmed
+        return img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+    except OSError:
+        return None
+
+
+def to_disk(masks):
+    """Keep {key: mask}; beyond TEX_KEEP files the ones unused longest go."""
+    try:
+        TEX_CACHE.mkdir(parents=True, exist_ok=True)
+        for k, img in masks.items():
+            img.save(str(on_disk(k)))
+        old = sorted(TEX_CACHE.glob('*.png'), key=lambda f: f.stat().st_mtime)
+        for f in old[:max(0, len(old) - TEX_KEEP)]:
+            f.unlink(missing_ok=True)
+    except OSError:
+        pass  # a cache: nothing depends on it
 
 
 def latex_source(s):
@@ -131,6 +164,10 @@ def typeset(keys):
     todo = [k for k in dict.fromkeys(keys) if k not in _typeset]
     if not LATEX or not todo:
         return
+    _typeset.update({k: img for k in todo if (img := from_disk(k)) is not None})
+    todo = [k for k in todo if k not in _typeset]
+    if not todo:
+        return
     src = ['\n'.join(map(latex_source, t.split('\n'))) for t, _ in todo]
     line = lambda t: rf'\strut {t if latex_ok(t) else "x"}'
     box = lambda t: line(t) if '\n' not in t else r'\vbox{' + ''.join(rf'\hbox{{{line(l)}}}' for l in t.split('\n')) + '}'
@@ -152,6 +189,7 @@ def typeset(keys):
                 img = QImage(str(Path(d, f'p{i + 1}.png'))) if aligned and i not in bad and latex_ok(src[i]) else None
                 _typeset[k] = None if img is None or img.isNull() else img.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied).scaled(
                     round(img.width() / SS), round(img.height() / SS), Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        to_disk({k: _typeset[k] for k in todo if _typeset[k] is not None})
     except Exception:
         _typeset.update(dict.fromkeys(todo))
 
