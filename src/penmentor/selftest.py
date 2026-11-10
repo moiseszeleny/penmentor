@@ -210,6 +210,20 @@ def overlay():
     assert [label for _, label, _ in tech.bar_items][-1] == 'close · esc'  # the bar's buttons were laid out
     pill = Pill(tech.shot, (0, 0, 1200, 800))
     assert not pill.grab().isNull()
+    # Settings > screens: with "focused" the model gets one screenshot, and its "screen 0" is the monitor you write on
+    from .config import CONF
+    wide, two = Image.new('RGB', (2400, 800), (250, 250, 250)), [(0, 0, 1200, 800), (1200, 0, 1200, 800)]
+    mark = dict(read_as=[], verdict='hint', headline='Look here', marks=[dict(shape='box', role='a', screen=0, box=[100, 100, 300, 200])])
+    saved = CONF['screens']
+    try:
+        for setting, shots, left in (('all', 2, 94), ('focused', 1, 1294)):
+            CONF['screens'] = setting
+            ov = Overlay(wide, (0, 0, 2400, 800), screens=two, main=1)
+            ov.set_result(mark)
+            xs = [p.x() for d in ov.items if d['kind'] == 'stroke' for p in d['pts']]
+            assert len(ov.shots) == shots and abs(min(xs) - left) < 2, (setting, len(ov.shots), min(xs))
+    finally:
+        CONF['screens'] = saved
 
 
 def page_export():
@@ -371,8 +385,9 @@ def subjects():
         assert phys.SYSTEM.startswith(sys_c.split('\n')[0].replace('a calculus tutor', phys.PHYSICS_TUTOR)[:60])
         assert 'Lagrangian and Euler-Lagrange' in phys.TECHNIQUES and set(phys.TASKS) == set(tasks_c)
         assert all(phys.TASKS[k] != tasks_c[k] for k in phys.PHYSICS_TASKS) and phys.TASKS['check'] == tasks_c['check']
-        CONF.update(techniques=['mine'])
-        assert importlib.reload(prompts).TECHNIQUES == ['mine']
+        CONF.update(techniques=['mine'], conventions=' metric (+,-,-,-) ')
+        mine = importlib.reload(prompts)
+        assert mine.TECHNIQUES == ['mine'] and mine.SYSTEM.endswith('unless the page says otherwise: metric (+,-,-,-)')
     finally:
         CONF.clear()
         CONF.update(saved)

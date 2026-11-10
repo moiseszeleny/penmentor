@@ -1,7 +1,8 @@
 """penmentor --daemon (Windows): the keys that start penmentor, which i3's bindsym gives you on Linux.
 
-A small resident process with an icon in the tray. Each key runs `penmentor` (or `penmentor --ask MODE`) as its own
-process, exactly like a window-manager binding would. The keys are in settings.json, "hotkeys":
+A small resident process with an icon in the tray (its menu: ask, the last answer, calculus or physics, the settings
+folder, the error log). Each key runs `penmentor` (or `penmentor --ask MODE`) as its own process, exactly like a
+window-manager binding would. The keys are in settings.json, "hotkeys":
 
   {"ctrl+alt+shift+a": [], "ctrl+alt+shift+m": ["--ask", "check"], "ctrl+alt+shift+s": ["--ask", "final"]}
 
@@ -18,7 +19,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 from . import desktop_win as W
-from .config import CACHE, CONF, SETTINGS
+from .config import CACHE, CHOICES, CONF, SESSION, SETTINGS, load, save
 
 DEFAULT = {'ctrl+alt+shift+a': [], 'ctrl+alt+shift+m': ['--ask', 'check'], 'ctrl+alt+shift+s': ['--ask', 'final']}
 MODS = {'alt': 0x1, 'ctrl': 0x2, 'control': 0x2, 'shift': 0x4, 'win': 0x8, 'super': 0x8}
@@ -98,7 +99,24 @@ def main():
     menu = QMenu()
     menu.addAction('Ask (menu)', lambda: launch([]))
     menu.addAction('Show the last answer', lambda: launch(['--last']))
+
+    def subject(v):  # the next key press is a new penmentor, which reads the settings afresh
+        if load()['subject'] != v:
+            SESSION.unlink(missing_ok=True)  # the conversation so far was with the other tutor
+            save(subject=v)
+            tray.showMessage('penmentor', f'Subject: {v}. Your next question starts a new conversation.',
+                             QSystemTrayIcon.MessageIcon.Information, 3000)
+    subjects = menu.addMenu('Subject')
+    picks = {v: subjects.addAction(f'{v}: {about}', lambda _=False, v=v: subject(v)) for v, about in CHOICES['subject']}
+    for a in picks.values():
+        a.setCheckable(True)
+    subjects.aboutToShow.connect(lambda: [a.setChecked(load()['subject'] == v) for v, a in picks.items()])
+
+    def error_log():
+        log = CACHE / 'error.log'
+        os.startfile(log) if log.exists() else tray.showMessage('penmentor', 'No error has been logged.')
     menu.addAction('Settings folder', lambda: (SETTINGS.parent.mkdir(parents=True, exist_ok=True), os.startfile(SETTINGS.parent)))
+    menu.addAction('Error log', error_log)
     menu.addSeparator()
     menu.addAction('Quit penmentor keys', app.quit)
     tray.setContextMenu(menu)

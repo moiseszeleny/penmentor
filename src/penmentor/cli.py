@@ -46,12 +46,20 @@ def label(key, value):
 
 
 def settings(reopen):
-    """Pick model / effort / context until Esc; each pick is saved at once. History: reopen(spec) an old animation."""
+    """Pick model / effort / context / subject / screens, or type your conventions, until Esc; each pick is saved at
+    once. History: reopen(spec) an old animation."""
     shown = lambda k: ':'.join(harness.pick(CONF[k])) if k == 'model' else CONF[k]  # the model with its harness, always
-    while c := rofi([f'{k:<8}{shown(k)}' for k in CHOICES] + [HISTORY_ROW], 'settings'):
+    while c := rofi([f'{k:<8}{shown(k)}' for k in CHOICES] + [f'conventions  {CONF["conventions"] or "(none)"}'[:90], HISTORY_ROW],
+                    'settings'):
         if c == HISTORY_ROW:
             return past_animations(reopen)
         key = c.split()[0]
+        if key == 'conventions':  # free text; Enter on an empty box clears them, Esc leaves them
+            v = rofi([], 'your conventions, e.g. metric (+,-,-,-), hbar = c = 1')
+            if v is not None and v.strip() != CONF['conventions']:
+                SESSION.unlink(missing_ok=True)  # the conversation so far did not know them
+                save(conventions=v.strip())
+            continue
         if key not in CHOICES:
             continue
         choices = model_choices() if key == 'model' else CHOICES[key]
@@ -116,6 +124,7 @@ def show_last():
     app, Overlay = app_and_overlay()
     ov = Overlay(Image.open(CACHE / 'last.png').convert('RGB'), d['geom'], None, d.get('screens'), d.get('main', 0),
                  d.get('wins'), d.get('mode', 'check'))
+    ov.sent = d.get('sent') or ov.sent  # the monitors the model had then, whatever Settings > screens says now
     ov.set_result(d['result'])
     ov.present()
     on_escape(lambda: os._exit(0))  # the marks stay over your live screen until Esc

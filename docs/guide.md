@@ -67,6 +67,16 @@ and modes stay the same; what changes:
 It is the model's judgement, not a computer algebra check: for long traces or index contractions, check a box at a time.
 Switching subject starts a new conversation.
 
+**Your conventions, once:** *Settings → conventions* takes a line of text (`"conventions"` in settings.json), for
+example `metric (+,-,-,-), hbar = c = 1, Peskin's normalisation`, and the model is told with every question, in
+either subject, so you need not write them on each page. What the page says still wins.
+
+### Fewer screenshots
+
+*Settings → screens → focused* sends only the monitor you are writing on instead of all of them: a faster, cheaper
+answer, and the model is not distracted by what is open elsewhere. Keep *all* when the problem sheet or a lecture
+is on the other monitor.
+
 ## How it works, and what leaves your computer
 
 A screenshot of every monitor, plus (with the xournal++ plugin) the whole current page of your notes, goes to the
@@ -147,7 +157,7 @@ No rofi, slop, xdotool or i3 needed: penmentor brings its own menu, region picke
 
 | Key | |
 |---|---|
-| Ctrl+Alt+Shift+A | the menu (also: click the tray icon) |
+| Ctrl+Alt+Shift+A | the menu (also: click the tray icon; right-click it for calculus / physics and the error log) |
 | Ctrl+Alt+Shift+M | did I make any mistakes? (`--ask check`) |
 | Ctrl+Alt+Shift+S | solution check (`--ask final`) |
 

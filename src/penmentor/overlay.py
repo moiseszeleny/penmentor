@@ -63,7 +63,7 @@ def qimage(pil):
 
 def save_last(ov, result):
     """For penmentor --last. On a thread (the PNG of a whole desktop takes a moment); each file whole or not at all."""
-    shot, meta = ov.shot_pil, json.dumps({'geom': ov.geom, 'screens': ov.screens, 'main': ov.main,
+    shot, meta = ov.shot_pil, json.dumps({'geom': ov.geom, 'screens': ov.screens, 'main': ov.main, 'sent': ov.sent,
                                           'wins': ov.wins, 'mode': ov.mode, 'result': result})
 
     def write():
@@ -233,6 +233,8 @@ class Overlay(QWidget):
         self.shot_pil = shot
         self.screens = [tuple(r) for r in screens or [(0, 0, *shot.size)]]
         self.main, self.wins = main if 0 <= main < len(self.screens) else 0, [tuple(r) for r in wins or []]
+        # the monitors the model gets, in the order it numbers them (Settings > screens: all, or only the focused one)
+        self.sent = [self.main] if CONF.get('screens') == 'focused' else list(range(len(self.screens)))
         self.M = QRectF(*self.screens[self.main])
         self.shot = qimage(shot)
         self.pal = PALETTE['dark']  # the focused window's, once its page is known
@@ -261,13 +263,13 @@ class Overlay(QWidget):
 
     @property
     def shots(self):
-        """What Claude sees: one shrunk PNG per monitor, with your boxes (numbered when several).
+        """What Claude sees: one shrunk PNG per monitor in self.sent, with your boxes (numbered when several).
         Built on the worker thread (0.2 s), so the pill shows at once."""
         boxes = list(enumerate(self.region or [], 1))
         return self.per_frame('shots', lambda shot: [
             prepare(shot.crop((x, y, x + w, y + h)), [(n if len(boxes) > 1 else None, (a - x, b - y, c - x, d - y))
                                                       for n, (a, b, c, d) in boxes if a < x + w and c > x and b < y + h and d > y])
-            for x, y, w, h in self.screens])
+            for x, y, w, h in (self.screens[i] for i in self.sent)])
 
     def top_geom(self):
         x, y, w, h = self.screens[self.main]
@@ -296,7 +298,7 @@ class Overlay(QWidget):
 
         def work():
             try:
-                r = ask(self.shots, text, self.main, new_shot, page=page and page.result())
+                r = ask(self.shots, text, self.sent.index(self.main), new_shot, page=page and page.result())
             except Exception as ex:
                 r = {'error': str(ex)[:300]}
             try:  # here, not in the Qt thread: LaTeX takes seconds (MiKTeX: 3), and the spinner keeps turning meanwhile
@@ -369,9 +371,10 @@ class Overlay(QWidget):
         marks = r.get('marks', [])
         boxes, pgs = [], []
         for m in marks:
-            k = m.get('screen')
-            k = k if isinstance(k, int) and 0 <= k < len(self.screens) else self.main
-            (x, y, w, _), s = self.screens[k], self.screens[k][2] / self.shots[k][1][0]
+            n = m.get('screen')  # the model's number for it: its place among the screenshots it got
+            n = n if isinstance(n, int) and 0 <= n < len(self.sent) else self.sent.index(self.main)
+            k = self.sent[n]
+            (x, y, w, _), s = self.screens[k], self.screens[k][2] / self.shots[n][1][0]
             b = [x + m['box'][0] * s, y + m['box'][1] * s, x + m['box'][2] * s, y + m['box'][3] * s]
             pgs.append(page := self.page_for(b))
             boxes.append(qrect(page.clip(b) if m['shape'] == 'ghost' else page.snap(b)))

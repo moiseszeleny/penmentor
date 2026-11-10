@@ -2,7 +2,8 @@
 
 settings.json "subject" picks the tutor: "calculus" (integrals, limits, series; the default) or "physics" (maths and
 theoretical physics: same marks and modes, its own methods list, rules on conventions and indices). "techniques" (a list)
-replaces the menu of "Which technique?" for either."""
+replaces the menu of "Which technique?" for either. "conventions" (a text: your metric, units, notation) goes to the
+model with every question."""
 from .config import CONF
 
 SUBJECT = CONF.get('subject', 'calculus')
@@ -72,6 +73,8 @@ PHYSICS_RULES = r"""
 - Besides amsmath, these are defined for your texts: \slashed{p}, \bra{\psi}, \ket{\psi}, \braket{\phi|\psi}, \expval{A}, \comm{A}{B}, \acomm{A}{B}, \dv{f}{x}, \pdv{f}{x}, \abs{x}, \norm{x}, \order{x}, \Tr, \dd."""
 if SUBJECT == 'physics':
     SYSTEM = SYSTEM.replace('a calculus tutor', PHYSICS_TUTOR) + PHYSICS_RULES
+if (CONF.get('conventions') or '').strip():  # yours, from Settings: no need to write them on every page
+    SYSTEM += "\n- The student's conventions and notation, unless the page says otherwise: " + CONF['conventions'].strip()
 
 TASKS = {
     'check': 'Check this work for mistakes. Circle the first real error (role error) with a note that shows the fix. '

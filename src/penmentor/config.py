@@ -28,8 +28,11 @@ CHOICES = {  # models as harness:model (which command-line agent runs it; see ha
     'effort': [('low', 'fastest'), ('medium', 'balanced'), ('high', 'more careful'), ('xhigh', 'slower'), ('max', 'slowest, most careful')],
     'context': [('on', 'each question builds on the earlier ones'), ('off', 'each question starts fresh')],
     'subject': [('calculus', 'integrals, limits, series'), ('physics', 'maths and theoretical physics')],  # prompts.py
+    'screens': [('all', 'the model sees every monitor'), ('focused', 'only the one you write on: faster, fewer tokens')],
 }
-CONF = {'model': 'claude:opus', 'effort': 'medium', 'context': 'on', 'subject': 'calculus', 'stats': False, 'read': False}  # stats/read: s and t panels, kept on between questions
+# conventions: yours, told to the model with every question (prompts.py). stats/read: panels, kept on between questions
+CONF = {'model': 'claude:opus', 'effort': 'medium', 'context': 'on', 'subject': 'calculus', 'screens': 'all',
+        'conventions': '', 'stats': False, 'read': False}
 
 
 def load():
