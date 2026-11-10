@@ -11,14 +11,21 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
-      QT_QPA_PLATFORM: offscreen  # no display on the runners
+      QT_QPA_PLATFORM: offscreen  # penmentor's own windows draw nowhere
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Qt's system libraries
+      - name: Qt's system libraries, and the tools penmentor asks the X desktop with
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 xdotool libnotify-bin xvfb
       - run: pip install -e .
-      - run: python -m penmentor --selftest
+      - name: selftest (Linux, on a virtual X display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m penmentor --selftest
+      - name: selftest (Windows)
+        if: runner.os == 'Windows'
+        run: python -m penmentor --selftest
